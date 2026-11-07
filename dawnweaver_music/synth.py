@@ -349,3 +349,63 @@ def write_midi(path, bpm, tracks):
             last = tick
         mid.tracks.append(tr)
     mid.save(path)
+
+
+# ---------------------------------------------------------------- violin / guitar
+def _body(raw, bands):
+    return sum(bp(raw, lo, hi) * g for lo, hi, g in bands)
+
+
+def violin(f, dur, vel, short=False):
+    """Solo violin: saw + body resonances, scoop, delayed vibrato, bow noise."""
+    n = int((dur + 0.15) * SR)
+    t = np.arange(n) / SR
+    scoop = 2 ** ((-0.25 * np.exp(-t / 0.035)) / 12)
+    vib = 0.0 if short or dur < 0.25 else 0.0045 * np.clip((t - 0.12) / 0.25, 0, 1)
+    fr = f * scoop * (1 + vib * np.sin(2 * np.pi * 5.8 * t + rng.random() * 6))
+    ph = np.cumsum(fr) / SR
+    raw = saw(ph) + 0.35 * saw(ph * 1.0025 + 0.4)
+    body = _body(raw, ((250, 350, 0.6), (420, 620, 0.8), (1000, 1400, 0.45),
+                       (2300, 3200, 0.9), (3800, 5200, 0.3))) + lp(raw, 7000) * 0.25
+    noise = bp(rng.standard_normal(n), 2500, 7000) * 0.05 * (0.4 + np.exp(-t / 0.04))
+    if short:
+        env = adsr(n, 0.008, 0.08, 0.35, 0.05, int(min(dur, 0.2) * SR))
+    else:
+        env = adsr(n, 0.025, 0.12, 0.85, 0.09, int(dur * SR))
+    return (body + noise) * env * vel * 0.55
+
+
+def _amp(x, gain=9.0, tone=4500):
+    x = hp(x, 90, 2)
+    x = np.tanh(x * gain)
+    x = lp(x, tone, 2) + bp(x, 700, 1600) * 0.5   # cabinet + mid bump
+    return lp(x, tone + 800, 2)
+
+
+def guitar_power(f, dur, vel, mute=False):
+    """Distorted power chord (root, 5th, octave) picked once."""
+    d = min(dur, 0.18) if mute else min(dur, 2.5)
+    n = int((d + (0.08 if mute else 0.3)) * SR)
+    raw = np.zeros(n)
+    for ratio, a in ((1, 1.0), (1.4983, 0.8), (2, 0.6)):
+        p = pluck(f * ratio, d + 0.5, 1.0, decay=0.9995)
+        raw += p[:n] * a if len(p) >= n else np.pad(p, (0, n - len(p)))[:n] * a
+    env = adsr(n, 0.002, 0.05, 1.0, 0.04 if mute else 0.15, int(d * SR))
+    out = _amp(raw * env, 12.0 if not mute else 9.0, 2600 if mute else 4800)
+    return out * vel * 0.32
+
+
+def guitar_lead(f, dur, vel):
+    """Sustained overdriven lead with bend-in and vibrato."""
+    n = int((dur + 0.2) * SR)
+    t = np.arange(n) / SR
+    bend = 2 ** ((-0.5 * np.exp(-t / 0.05)) / 12) if dur >= 0.4 else 1.0
+    vib = 0.006 * np.clip((t - 0.25) / 0.2, 0, 1) if dur >= 0.6 else 0.0
+    fr = f * bend * (1 + vib * np.sin(2 * np.pi * 6.0 * t))
+    ph = np.cumsum(fr) / SR
+    raw = saw(ph) * 0.6 + np.sign(np.sin(2 * np.pi * ph)) * 0.3
+    att = pluck(f, dur, 1.0, decay=0.999)
+    att = np.pad(att, (0, max(0, n - len(att))))[:n]
+    env = adsr(n, 0.004, 0.2, 0.75, 0.08, int(dur * SR))
+    out = _amp((raw * 0.5 + att * 0.8) * env, 7.0, 5200)
+    return out * vel * 0.3
