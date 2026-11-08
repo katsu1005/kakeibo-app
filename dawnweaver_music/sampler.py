@@ -170,17 +170,40 @@ class Instrument:
         return d * vel * self.gain
 
 
+def onset_latency(sig, frac=0.5, max_s=0.2):
+    """Seconds from the start of a rendered note until it is perceptibly 'there': the 5 ms
+    envelope first reaches `frac` of the note's early steady level. Slow bowed attacks can take
+    50-180 ms, plucks and spiccato ~0-10 ms."""
+    m = np.abs(sig).max(0)
+    w = int(0.005 * SR)
+    if len(m) < 4 * w:
+        return 0.0
+    env = np.convolve(m, np.ones(w) / w, mode="same")
+    if len(env) > int(0.4 * SR):
+        level = min(np.median(env[int(0.1 * SR):int(0.4 * SR)]), env.max())
+    else:
+        level = env.max()
+    if level <= 0:
+        return 0.0
+    return min(max_s, int(np.argmax(env >= frac * level)) / SR)
+
+
 class StereoMix:
     """Like synth.Mix but for stereo sample buffers."""
 
-    def __init__(self, seconds, bpm):
+    def __init__(self, seconds, bpm, align_onsets=False):
         self.spb = 60.0 / bpm
         self.n = int(seconds * SR)
         self.buses = {}
+        # when True, every added note is moved earlier by its measured onset latency so that
+        # slow-attack (bowed) and fast-attack (plucked) parts land together on the beat
+        self.align_onsets = align_onsets
 
-    def add(self, bus, sig, beat, pan=0.0, gain=1.0, humanize=0.0, rng=None, note=None):
+    def add(self, bus, sig, beat, pan=0.0, gain=1.0, humanize=0.0, rng=None, note=None, align=None):
         b = self.buses.setdefault(bus, np.zeros((2, self.n)))
         t = beat * self.spb + (rng.normal(0, humanize) if humanize and rng is not None else 0.0)
+        if (self.align_onsets if align is None else align):
+            t -= onset_latency(sig)
         i = max(0, int(round(t * SR)))
         if i >= self.n:
             return
@@ -205,4 +228,4 @@ def place_swell(mx, bus, sig, target_beat, pan=0.0, gain=1.0, tail_s=0.6):
     fade = end - pk
     if fade > 0:
         s[:, pk:end] *= np.linspace(1, 0, fade) ** 2
-    mx.add(bus, s, target_beat - pk / SR / mx.spb, pan=pan, gain=gain)
+    mx.add(bus, s, target_beat - pk / SR / mx.spb, pan=pan, gain=gain, align=False)

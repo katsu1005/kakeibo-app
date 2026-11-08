@@ -5,7 +5,7 @@ Run:  python violin_real.py     -> out/dawnweaver_battle_violin_real_loop.(wav|m
 import os
 import numpy as np
 from synth import SR, midi_of, parse_line, make_ir, reverb, fold_loop, write_midi, hp, lp
-from sampler import Instrument, StereoMix, place_swell
+from sampler import Instrument, StereoMix, place_swell, onset_latency
 from songs import OUT, chord, export
 from songs2 import root_in, run
 from harmony import harmony_under
@@ -70,7 +70,7 @@ def main():
     tamb = Instrument("Percussion", pattern=r"^Tamb1-Hit", pitched=False)
     swell = Instrument("Percussion", pattern=r"^susCymb1-cresc-Median", pitched=False)
 
-    mx = StereoMix(LOOP_S + 5.0, BPM)
+    mx = StereoMix(LOOP_S + 5.0, BPM, align_onsets=True)
     H = 0.006  # timing humanize (s)
 
     # ---- solo violin lead, phrased like a player: notes inside a phrase are slurred (start on
@@ -98,8 +98,21 @@ def main():
         lead = xin / 2
         length = lead + nd + (xout / 2 if joins_next else 0.0)
         rel = 0.002 if joins_next else 0.10
+        lat = 0.0
         if not connected:
-            sig = vln_arco.render(m, length, v, release=rel)
+            # phrase start: measure how long the bowed attack takes to speak, start that much
+            # earlier and extend the note by the same amount so the joint with the next note stays put
+            sig = vln_arco.render(m, length + 0.25, v, release=0.002)
+            lat = onset_latency(sig)
+            e = min(sig.shape[1], int((lat + length) * SR))
+            if not joins_next:
+                r = min(sig.shape[1] - e, int(0.10 * SR))
+                sig = sig[:, :e + r].copy()
+                sig[:, e:e + r] *= np.linspace(1, 0, r) ** 1.5
+            else:
+                sig = sig[:, :e].copy()
+            lead = lat
+            length = lat + length
         elif new_bow:   # re-bow: light attack
             sig = vln_arco.render(m, length, v * 0.97, release=rel, offset=0.035)
         else:           # slur: start on the sustain
@@ -115,14 +128,14 @@ def main():
         # measure the note body (between the joints) for level matching below
         a, z = int((lead + 0.1 * nd) * SR), int((lead + 0.9 * nd) * SR)
         body = np.sqrt(np.mean(sig[:, a:max(z, a + 64)] ** 2)) + 1e-12
-        rendered.append((b - lead / SPB, sig, v, body, m, length))
+        rendered.append((b - lead / SPB, sig, v, body, m, length))  # lead = joint half or onset latency
     # level-match: the per-pitch recordings differ by several dB, which made neighbouring notes
     # jump in level. Scale every note so its body level follows the phrase dynamics (v),
     # limited to +-6 dB so the natural shape of each recording is kept.
     c = np.median([r[3] / r[2] for r in rendered])
     for beat, sig, v, body, m, length in rendered:
         g = np.clip(c * v / body, 0.5, 2.0)
-        mx.add("solo", sig, beat, pan=0.05, gain=g, note=(m, length))
+        mx.add("solo", sig, beat, pan=0.05, gain=g, note=(m, length), align=False)  # aligned above
 
     # B section: violin section plays a 3rd/6th under the solo
     duet = harmony_under([e for e in mel if 32 <= e[0] < 64 and e[1] >= 0.5], PROG)
