@@ -79,9 +79,17 @@ def main():
     for b, d, m in mel:
         v = phrase_vel(b) * rng.uniform(0.93, 1.03)
         if d <= 0.25:
-            sig = vln_spic.render(m, None, v * 1.05)
-            sig = sig[:, : int(0.35 * SR)]
-            sig[:, -400:] *= np.linspace(1, 0, 400)
+            # spiccato samples hit ~7-13 dB harder than the arco notes around them: match each
+            # one to the onset level of the equivalent arco note (+1 dB), soften the edge a little
+            sig = vln_spic.render(m, None, v)
+            sig = sig[:, : int(0.32 * SR)]
+            ref = vln_arco.render(m, 0.5 * SPB, v, release=0.05)
+            on = int(0.09 * SR)
+            g = np.sqrt(np.mean(ref[:, :on] ** 2)) / (np.sqrt(np.mean(sig[:, :on] ** 2)) + 1e-12)
+            sig = lp(sig * g * 10 ** (1 / 20), 6500, 1)
+            fi = int(0.006 * SR)
+            sig[:, :fi] *= np.linspace(0, 1, fi)
+            sig[:, -600:] *= np.linspace(1, 0, 600)
         else:
             sig = vln_arco.render(m, d * SPB + 0.03, v, release=0.10)
         mx.add("solo", sig, b, pan=0.05, humanize=H * 0.5, rng=rng)
