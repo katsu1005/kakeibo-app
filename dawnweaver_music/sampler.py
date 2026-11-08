@@ -138,12 +138,19 @@ class Instrument:
         self._rr[k] = i + 1
         return cands[i % len(cands)]
 
-    def render(self, midi=60, dur=None, vel=0.8, release=0.12, fade_in=0.0):
+    def render(self, midi=60, dur=None, vel=0.8, release=0.12, fade_in=0.0, offset=0.0):
+        """offset: seconds to skip into the (pitch-shifted) sample, e.g. to start a slurred
+        note on the sustain part instead of a fresh attack."""
         s = self.pick(midi, vel)
         d = self._get(s["path"])
-        if self.pitched and s["midi"] != midi:
-            ratio = 2 ** ((midi - s["midi"]) / 12)
+        ratio = 2 ** ((midi - s["midi"]) / 12) if self.pitched and s["midi"] != midi else 1.0
+        start = int(offset * SR * ratio)
+        if start:
+            d = d[:, start:]
+        if ratio != 1.0:
             n = int(d.shape[1] / ratio)
+            if dur is not None:
+                n = min(n, int((dur + release) * SR) + 1)
             x = np.arange(n) * ratio
             d = np.stack([np.interp(x, np.arange(d.shape[1]), c) for c in d])
         if dur is not None:
@@ -171,7 +178,7 @@ class StereoMix:
         self.n = int(seconds * SR)
         self.buses = {}
 
-    def add(self, bus, sig, beat, pan=0.0, gain=1.0, humanize=0.0, rng=None):
+    def add(self, bus, sig, beat, pan=0.0, gain=1.0, humanize=0.0, rng=None, note=None):
         b = self.buses.setdefault(bus, np.zeros((2, self.n)))
         t = beat * self.spb + (rng.normal(0, humanize) if humanize and rng is not None else 0.0)
         i = max(0, int(round(t * SR)))

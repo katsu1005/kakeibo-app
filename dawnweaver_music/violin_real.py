@@ -52,7 +52,6 @@ def phrase_vel(beat):
 
 def main():
     vln_arco = Instrument("Strings/Solo Violin/Arco Vib")
-    vln_spic = Instrument("Strings/Solo Violin/spic")
     vs_sus = Instrument("Strings/Violin Section/susVib")
     vs_spic = Instrument("Strings/Violin Section/Spic")
     va_sus = Instrument("Strings/Viola Section/susvib")
@@ -74,25 +73,56 @@ def main():
     mx = StereoMix(LOOP_S + 5.0, BPM)
     H = 0.006  # timing humanize (s)
 
-    # ---- solo violin lead (spiccato for 16ths, arco otherwise, slight legato overlap)
+    # ---- solo violin lead, phrased like a player: notes inside a phrase are slurred (start on
+    # the sustain part of the arco sample and cross-fade with the previous note); a new bow
+    # (soft attack) only after a rest or on a long note that starts on the beat.
     mel = melody()
-    for b, d, m in mel:
-        v = phrase_vel(b) * rng.uniform(0.93, 1.03)
-        if d <= 0.25:
-            # spiccato samples hit ~7-13 dB harder than the arco notes around them: match each
-            # one to the onset level of the equivalent arco note (+1 dB), soften the edge a little
-            sig = vln_spic.render(m, None, v)
-            sig = sig[:, : int(0.32 * SR)]
-            ref = vln_arco.render(m, 0.5 * SPB, v, release=0.05)
-            on = int(0.09 * SR)
-            g = np.sqrt(np.mean(ref[:, :on] ** 2)) / (np.sqrt(np.mean(sig[:, :on] ** 2)) + 1e-12)
-            sig = lp(sig * g * 10 ** (1 / 20), 6500, 1)
-            fi = int(0.006 * SR)
-            sig[:, :fi] *= np.linspace(0, 1, fi)
-            sig[:, -600:] *= np.linspace(1, 0, 600)
-        else:
-            sig = vln_arco.render(m, d * SPB + 0.03, v, release=0.10)
-        mx.add("solo", sig, b, pan=0.05, humanize=H * 0.5, rng=rng)
+    nxt = {round(b, 3): i for i, (b, d, m) in enumerate(mel)}
+    # cross-fade length at each joint (shared by the outgoing and incoming note)
+    xf_after = []
+    for i, (b, d, m) in enumerate(mel):
+        j = nxt.get(round(b + d, 3))
+        xf_after.append(min(0.03, 0.35 * d * SPB, 0.35 * mel[j][1] * SPB) if j is not None else 0.0)
+    xf_before = [0.0] * len(mel)
+    for i, (b, d, m) in enumerate(mel):
+        j = nxt.get(round(b + d, 3))
+        if j is not None:
+            xf_before[j] = xf_after[i]
+    rendered = []
+    for i, (b, d, m) in enumerate(mel):
+        v = phrase_vel(b) * rng.uniform(0.97, 1.02)
+        nd = d * SPB
+        xin, xout = xf_before[i], xf_after[i]
+        connected, joins_next = xin > 0, xout > 0
+        new_bow = (not connected) or (d >= 1 and abs(b - round(b)) < 1e-6)
+        lead = xin / 2
+        length = lead + nd + (xout / 2 if joins_next else 0.0)
+        rel = 0.002 if joins_next else 0.10
+        if not connected:
+            sig = vln_arco.render(m, length, v, release=rel)
+        elif new_bow:   # re-bow: light attack
+            sig = vln_arco.render(m, length, v * 0.97, release=rel, offset=0.035)
+        else:           # slur: start on the sustain
+            sig = vln_arco.render(m, length, v * 0.95, release=rel, offset=0.14)
+        if connected:   # equal-power fade-in across the shared joint
+            n = min(sig.shape[1], int(xin * SR))
+            sig[:, :n] *= np.sin(np.linspace(0, np.pi / 2, n))
+        if joins_next:  # equal-power fade-out across the joint
+            n = int(xout * SR)
+            e = min(sig.shape[1], int(length * SR))
+            sig = sig[:, :e]
+            sig[:, e - n:e] *= np.cos(np.linspace(0, np.pi / 2, n))
+        # measure the note body (between the joints) for level matching below
+        a, z = int((lead + 0.1 * nd) * SR), int((lead + 0.9 * nd) * SR)
+        body = np.sqrt(np.mean(sig[:, a:max(z, a + 64)] ** 2)) + 1e-12
+        rendered.append((b - lead / SPB, sig, v, body, m, length))
+    # level-match: the per-pitch recordings differ by several dB, which made neighbouring notes
+    # jump in level. Scale every note so its body level follows the phrase dynamics (v),
+    # limited to +-6 dB so the natural shape of each recording is kept.
+    c = np.median([r[3] / r[2] for r in rendered])
+    for beat, sig, v, body, m, length in rendered:
+        g = np.clip(c * v / body, 0.5, 2.0)
+        mx.add("solo", sig, beat, pan=0.05, gain=g, note=(m, length))
 
     # B section: violin section plays a 3rd/6th under the solo
     duet = harmony_under([e for e in mel if 32 <= e[0] < 64 and e[1] >= 0.5], PROG)
@@ -171,7 +201,7 @@ def main():
                 mx.add("timp", timp.render(r, 0.3, 0.35 + 0.08 * k, release=0.1), b0 + 2 + k * 0.25, pan=-0.15)
 
     # ---- mix
-    gains = {"solo": 1.0, "sect": 0.95, "low": 0.55, "stacc": 0.45, "pad": 0.75, "harp": 0.75,
+    gains = {"solo": 0.8, "sect": 0.95, "low": 0.55, "stacc": 0.45, "pad": 0.75, "harp": 0.75,
              "perc": 0.5, "timp": 0.8}
     wet = {"solo": 0.22, "sect": 0.25, "low": 0.12, "stacc": 0.15, "pad": 0.3, "harp": 0.3,
            "perc": 0.12, "timp": 0.2}
@@ -186,6 +216,11 @@ def main():
     x = x / np.max(np.abs(x))
     x = np.tanh(x * 1.15) / np.tanh(1.15)  # gentle peak control only
     x = x / np.max(np.abs(x)) * 0.89
+    # keep the loudness the game's playback gain was tuned for (v1.8: -11.5 LUFS)
+    import pyloudnorm
+    lufs = pyloudnorm.Meter(SR).integrated_loudness(x.T)
+    if lufs > -11.5:
+        x = x * 10 ** ((-11.5 - lufs) / 20)
     export("dawnweaver_battle_violin_real_loop", x, loop_n, "糸車の剣舞 (Violin Battle, recorded strings)")
     write_midi(os.path.join(OUT, "dawnweaver_battle_violin_real.mid"), BPM,
                [("Solo Violin", 40, 0, mel), ("Violin Section", 48, 1, duet), ("Cello/Bass", 42, 2, bass_ev),

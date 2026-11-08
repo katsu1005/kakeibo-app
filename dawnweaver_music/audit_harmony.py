@@ -20,7 +20,11 @@ def render(self, midi=60, dur=None, vel=0.8, **kw):
 
 
 def add(self, bus, sig, beat, **kw):
-    if _last.get("note"):
+    tag = kw.get("note")
+    if tag is not None:
+        midi, dur = tag
+        log.append((bus, beat, int(round(midi)), (dur or 0) / self.spb))
+    elif _last.get("note"):
         midi, dur = _last["note"]
         log.append((bus, beat, int(round(midi)), (dur or 0) / self.spb))
     _last["note"] = None
