@@ -103,6 +103,11 @@ class Instrument:
             self.octave_fix = int(vals[np.argmax(counts)]) if force_fix is None else force_fix
             for smp in self.samples:
                 smp["midi"] += self.octave_fix
+                # a few samples are mislabelled by about a semitone (e.g. clarinet "F#5" sounds F):
+                # correct those when the measured offset is clearly between 1 and 1.6 semitones
+                r = (cache[os.path.relpath(smp["path"], VSCO)] - smp["midi"] + 6) % 12 - 6
+                if 1.0 <= abs(r) <= 1.6:
+                    smp["midi"] += int(round(r))
         self.layers = sorted({s["layer"] for s in self.samples})
         self._cache = {}
         self._rr = {}

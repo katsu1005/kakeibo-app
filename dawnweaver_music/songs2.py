@@ -5,6 +5,7 @@ Run:  python songs2.py [violin] [guitar]
 import os
 from synth import *  # noqa: F401,F403
 from songs import OUT, chord, export, render
+from harmony import harmony_under
 
 
 def root_in(name, lo="E2"):
@@ -52,7 +53,7 @@ def violin_battle():
     for b, d, m in mel:
         mx.add("vln", violin(hz(m), d * spb, 0.9, short=d <= 0.25), b, pan=0.1)
     # second violin a 6th/3rd below in B section for a duet feel
-    duet = [(b, d, m - (9 if m % 12 in (0, 4, 5, 9) else 8)) for b, d, m in mel if 32 <= b < 64]
+    duet = harmony_under([e for e in mel if 32 <= e[0] < 64], prog)
     for b, d, m in duet:
         mx.add("vln2", violin(hz(m), d * spb, 0.6, short=d <= 0.25), b, pan=-0.35)
 

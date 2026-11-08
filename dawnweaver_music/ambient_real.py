@@ -10,6 +10,7 @@ from sampler import Instrument, StereoMix, place_swell
 from songs import OUT, chord, export
 from songs2 import root_in
 from orchestral_real import Orchestra, fit, mixdown
+from harmony import harmony_under
 
 rng = np.random.default_rng(31)
 H = 0.008
@@ -160,7 +161,7 @@ def field(o):
     # A: flute, B: oboe (with clarinet a 3rd/6th below), A': violins + flute an octave up
     legato(mx, "melody", o.fl, A, spb, 0.75, 0.15, overlap=0.04)
     legato(mx, "melody", o.ob, B, spb, 0.75, 0.1, overlap=0.04)
-    under = [(b, d, m - (3 if m % 12 in (4, 11) else 4)) for b, d, m in B if d >= 1]
+    under = harmony_under([e for e in B if e[1] >= 1], prog)
     legato(mx, "wind2", o.cl, under, spb, 0.45, -0.25, overlap=0.04)
     legato(mx, "melody", o.vs_sus, A2, spb, 0.8, -0.3, overlap=0.05)
     legato(mx, "wind2", o.fl, [(b, d, m + 12) for b, d, m in A2 if d >= 0.5], spb, 0.45, 0.3, overlap=0.04)

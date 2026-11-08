@@ -8,6 +8,7 @@ from synth import SR, midi_of, parse_line, make_ir, reverb, fold_loop, write_mid
 from sampler import Instrument, StereoMix, place_swell
 from songs import OUT, chord, export
 from songs2 import root_in, run
+from harmony import harmony_under
 
 rng = np.random.default_rng(11)
 
@@ -86,7 +87,7 @@ def main():
         mx.add("solo", sig, b, pan=0.05, humanize=H * 0.5, rng=rng)
 
     # B section: violin section plays a 3rd/6th under the solo
-    duet = [(b, d, m - (9 if m % 12 in (0, 4, 5, 9) else 8)) for b, d, m in mel if 32 <= b < 64 and d >= 0.5]
+    duet = harmony_under([e for e in mel if 32 <= e[0] < 64 and e[1] >= 0.5], PROG)
     for b, d, m in duet:
         mx.add("sect", vs_sus.render(m, d * SPB + 0.05, 0.45, release=0.18), b, pan=-0.35, humanize=H, rng=rng)
     # C section: violin section doubles the long melody notes an octave down for weight
