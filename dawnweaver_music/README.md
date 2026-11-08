@@ -2,6 +2,8 @@
 
 | ファイル | 曲名 | 調 / テンポ | 長さ | 用途 |
 |---|---|---|---|---|
+| `out/dawnweaver_title_theme_real_loop.*` | 暁を織る者 | ニ長調 / 84 BPM / 3拍子 / 24小節 | 51.43秒 | タイトル画面（ループ、実録音） |
+| `out/dawnweaver_field_real_loop.*` | 灯の谷を渡る風 | ト長調 / 108 BPM / 4拍子 / 24小節 | 53.33秒 | フィールド（ループ、実録音） |
 | `out/dawnweaver_battle_normal_loop.*` | 朝霧を織る刃 | ニ短調 / 156 BPM / 4拍子 / 24小節 | 36.92秒 | 通常戦闘（ループ） |
 | `out/dawnweaver_battle_boss_loop.*` | 黎明を喰らうもの | ハ短調 / 172 BPM / 4拍子（3+3+2）/ 32小節 | 44.65秒 | ボス戦（ループ） |
 | `out/dawnweaver_battle_violin_loop.*` | 糸車の剣舞 | イ短調 / 168 BPM / 4拍子 / 24小節 | 34.29秒 | 戦闘・バイオリン主役（ループ） |
@@ -19,7 +21,8 @@
 ## 生録音版（`violin_real.py` / `orchestral_real.py`）
 
 - 音源: [VSCO 2 Community Edition](https://github.com/sgossner/VSCO-2-CE)（CC0 1.0）。ソロバイオリン（アルコ / スピッカート）、バイオリン・ビオラ・チェロ各セクション、コントラバス、ハープ、ティンパニ、大太鼓、スネア、シンバル、タンバリンの実録音を使用。
-- 生成: `VSCO_DIR=<VSCO 2 CEのパス> python violin_real.py`、`python orchestral_real.py`（ボス・勝利）。`sampler.py` が読み込み。
+- 生成: `VSCO_DIR=<VSCO 2 CEのパス> python violin_real.py`、`python orchestral_real.py`（ボス・勝利）、`python ambient_real.py`（タイトル・フィールド）。`sampler.py` が読み込み。
 - ボス・勝利では弦に加えてホルン、トロンボーン、トランペット、チューバ、フルート、グロッケンシュピール、ゴング、スネアロール、ティンパニロールを使用。VSCO 2 CE のオルガンは別ライセンス表記があるため使っていない。
 - VSCO 2 CE のファイル名の音名は弦セクションなどで1オクターブ低く表記されているため、各サンプルの音高を測定し、フォルダごとに多数決でオクターブを補正（結果は `vsco_pitch_cache.json`）。
 - ティンパニは一番低いドラム（実測 約89.5Hz ≒ F2）だけを使い、F2〜C3 の狭い範囲で移調。
+- サスペンデッドシンバルのクレッシェンドは、録音の音量ピークを狙った拍に合わせて配置（`place_swell`）。

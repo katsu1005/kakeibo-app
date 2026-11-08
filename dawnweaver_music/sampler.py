@@ -64,7 +64,7 @@ def _detect_midi(d, start):
 
 
 class Instrument:
-    def __init__(self, folder, pattern=None, pitched=True, label_fix=True, gain=1.0):
+    def __init__(self, folder, pattern=None, pitched=True, label_fix=True, gain=1.0, force_fix=None):
         self.folder = os.path.join(VSCO, folder)
         self.pitched = pitched
         self.gain = gain
@@ -100,7 +100,7 @@ class Instrument:
         if pitched and label_fix and offsets:
             # one octave correction per folder (majority vote; robust to detector outliers)
             vals, counts = np.unique(offsets, return_counts=True)
-            self.octave_fix = int(vals[np.argmax(counts)])
+            self.octave_fix = int(vals[np.argmax(counts)]) if force_fix is None else force_fix
             for smp in self.samples:
                 smp["midi"] += self.octave_fix
         self.layers = sorted({s["layer"] for s in self.samples})
@@ -180,3 +180,17 @@ class StereoMix:
         # balance-style pan (keeps the recording's own stereo image)
         b[0, i:i + sig.shape[1]] += sig[0] * min(1.0, l)
         b[1, i:i + sig.shape[1]] += sig[1] * min(1.0, r)
+
+
+def place_swell(mx, bus, sig, target_beat, pan=0.0, gain=1.0, tail_s=0.6):
+    """Place a crescendo sample so its loudest point lands on target_beat; trim the ring-out."""
+    env = np.abs(sig).max(0)
+    w = int(0.03 * SR)
+    sm = np.convolve(env, np.ones(w) / w, mode="same")
+    pk = int(np.argmax(sm))
+    end = min(sig.shape[1], pk + int(tail_s * SR))
+    s = sig[:, :end].copy()
+    fade = end - pk
+    if fade > 0:
+        s[:, pk:end] *= np.linspace(1, 0, fade) ** 2
+    mx.add(bus, s, target_beat - pk / SR / mx.spb, pan=pan, gain=gain)

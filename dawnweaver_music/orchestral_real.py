@@ -6,7 +6,7 @@ import os
 import sys
 import numpy as np
 from synth import SR, midi_of, parse_line, make_ir, reverb, fold_loop, write_midi, hp
-from sampler import Instrument, StereoMix
+from sampler import Instrument, StereoMix, place_swell
 from songs import OUT, chord, export
 from songs2 import root_in
 
@@ -201,8 +201,7 @@ def boss(o):
             mx.add("timp", o.timp_roll.render(r, 2 * spb, 0.8, release=0.1, fade_in=0.4), b0 + 2, pan=-0.2)
     sr_ = o.snare_roll.render(vel=0.9)
     mx.add("perc", sr_[:, : int(4 * spb * SR)] * np.linspace(0.3, 1.2, int(4 * spb * SR)), 31 * 4, pan=0.1)
-    sw = o.swell.render(vel=0.9)
-    mx.add("perc", sw, 32 * 4 - sw.shape[1] / SR / spb, pan=0.0)
+    place_swell(mx, "perc", o.swell.render(vel=0.7), 32 * 4)
 
     gains = {"brass": 1.0, "strings": 1.0, "wind": 0.9, "ost": 0.5, "low": 0.6, "stab": 0.5,
              "pad": 0.45, "perc": 0.65, "timp": 0.8}
@@ -271,8 +270,7 @@ def victory(o):
     mx.add("perc", o.bdrum.render(vel=0.95), 8)
     mx.add("perc", o.crash.render(vel=1.0), 8, pan=0.4)
     mx.add("perc", o.crash.render(vel=0.85), 8, pan=-0.4)
-    sw = o.swell.render(vel=0.7)
-    mx.add("perc", sw, 8 - sw.shape[1] / SR / spb, pan=0.0)
+    place_swell(mx, "perc", o.swell.render(vel=0.55), 8)
 
     gains = {"brass": 1.0, "strings": 0.75, "low": 0.6, "wind": 0.9, "harp": 1.0, "perc": 0.6, "timp": 0.8}
     wet = {"brass": 0.3, "strings": 0.32, "low": 0.2, "wind": 0.35, "harp": 0.4, "perc": 0.22, "timp": 0.3}

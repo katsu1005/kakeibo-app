@@ -5,7 +5,7 @@ Run:  python violin_real.py     -> out/dawnweaver_battle_violin_real_loop.(wav|m
 import os
 import numpy as np
 from synth import SR, midi_of, parse_line, make_ir, reverb, fold_loop, write_midi, hp, lp
-from sampler import Instrument, StereoMix
+from sampler import Instrument, StereoMix, place_swell
 from songs import OUT, chord, export
 from songs2 import root_in, run
 
@@ -152,8 +152,7 @@ def main():
             for k in range(4):
                 mx.add("perc", snare.render(vel=0.35 + 0.15 * k), b0 + 3 + k * 0.25, pan=0.1)
         if bi == 15:
-            sw = swell.render(vel=0.8)
-            mx.add("perc", sw, 16 * 4 - sw.shape[1] / SR / SPB, pan=0.0)
+            place_swell(mx, "perc", swell.render(vel=0.6), 16 * 4)
         # timpani on phrase starts and cadences (F2..C3 to keep the pitch-shift small)
         r = root_in(PROG[bi], "F2")
         if bi % 4 == 0 or bi % 8 == 7:

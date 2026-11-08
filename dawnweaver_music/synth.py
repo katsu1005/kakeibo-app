@@ -322,13 +322,13 @@ def write_wav(path, stereo):
     wavfile.write(path, SR, data)
 
 
-def write_midi(path, bpm, tracks):
+def write_midi(path, bpm, tracks, numerator=4):
     """tracks: list of (name, program, channel, events[(beat, dur, midi, vel?)])"""
     import mido
     mid = mido.MidiFile(ticks_per_beat=480)
     meta = mido.MidiTrack()
     meta.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(bpm), time=0))
-    meta.append(mido.MetaMessage("time_signature", numerator=4, denominator=4, time=0))
+    meta.append(mido.MetaMessage("time_signature", numerator=numerator, denominator=4, time=0))
     mid.tracks.append(meta)
     for name, program, ch, events in tracks:
         tr = mido.MidiTrack()
