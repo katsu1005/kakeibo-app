@@ -16,6 +16,8 @@ BPM, NBARS = 168, 24
 SPB = 60 / BPM
 LOOP_S = NBARS * 4 * SPB
 
+HARP_LEAD = (32, 60)  # beats where the harp carries the melody
+
 PROG = ["Am", "F", "G", "Am", "Am", "F", "G", "E",
         "Dm", "G", "C", "Am", "Dm", "F", "E", "E",
         "Am", "G", "F", "E", "Am", "G", "F", "E7"]
@@ -76,7 +78,11 @@ def main():
     # ---- solo violin lead, phrased like a player: notes inside a phrase are slurred (start on
     # the sustain part of the arco sample and cross-fade with the previous note); a new bow
     # (soft attack) only after a rest or on a long note that starts on the beat.
-    mel = melody()
+    full_mel = melody()
+    # bars 9-15 (~11.4-21.4 s): the harp takes the tune; the violin only holds the long notes
+    # softly underneath, then comes back with the bar-16 descent into the C section (~23 s)
+    harp_tune = [e for e in full_mel if HARP_LEAD[0] <= e[0] < HARP_LEAD[1]]
+    mel = [e for e in full_mel if not (HARP_LEAD[0] <= e[0] < HARP_LEAD[1]) or e[1] >= 1.5]
     nxt = {round(b, 3): i for i, (b, d, m) in enumerate(mel)}
     # cross-fade length at each joint (shared by the outgoing and incoming note)
     xf_after = []
@@ -90,7 +96,7 @@ def main():
             xf_before[j] = xf_after[i]
     rendered = []
     for i, (b, d, m) in enumerate(mel):
-        v = phrase_vel(b) * rng.uniform(0.97, 1.02)
+        v = (0.42 if HARP_LEAD[0] <= b < HARP_LEAD[1] else phrase_vel(b)) * rng.uniform(0.97, 1.02)
         nd = d * SPB
         xin, xout = xf_before[i], xf_after[i]
         connected, joins_next = xin > 0, xout > 0
@@ -125,9 +131,18 @@ def main():
         mx.add("solo", sig, beat, pan=0.05, gain=g, note=(m, length))
 
     # B section: violin section plays a 3rd/6th under the solo
-    duet = harmony_under([e for e in mel if 32 <= e[0] < 64 and e[1] >= 0.5], PROG)
+    duet = harmony_under([e for e in full_mel if 32 <= e[0] < 64 and e[1] >= 0.5], PROG)
     for b, d, m in duet:
-        mx.add("sect", vs_sus.render(m, d * SPB + 0.05, 0.45, release=0.18), b, pan=-0.35, humanize=H, rng=rng)
+        dv = 0.28 if HARP_LEAD[0] <= b < HARP_LEAD[1] else 0.45
+        mx.add("sect", vs_sus.render(m, d * SPB + 0.05, dv, release=0.18), b, pan=-0.35, humanize=H, rng=rng)
+    # harp lead: melody with a soft octave below for body; long notes get a chord tone underneath
+    under = {round(b, 3): m for b, d, m in harmony_under([e for e in harp_tune if e[1] >= 2], PROG)}
+    for b, d, m in harp_tune:
+        hv = 0.85 if d >= 0.5 else 0.7
+        mx.add("harplead", harp.render(m, None, hv), b, pan=0.25, humanize=H * 0.5, rng=rng)
+        mx.add("harplead", harp.render(m - 12, None, hv * 0.45), b, pan=0.3, humanize=H * 0.5, rng=rng)
+        if round(b, 3) in under:
+            mx.add("harplead", harp.render(under[round(b, 3)], None, 0.45), b + 0.02, pan=0.3)
     # C section: violin section doubles the long melody notes an octave down for weight
     for b, d, m in mel:
         if b >= 64 and d >= 1:
@@ -167,10 +182,10 @@ def main():
             pad_ev.append((b0, 4, m))
         # harp: 8th arpeggios in B, rising arpeggio on each bar of A's 4th/8th bars
         if 8 <= bi < 16:
-            a = chord(c, 4)[1][:3]
+            a = chord(c, 3)[1][:3]
             for k in range(8):
-                m = [a[0], a[1], a[2], a[0] + 12][k % 4] + (12 if k >= 4 else 0)
-                mx.add("harp", harp.render(m, None, 0.55), b0 + k * 0.5, pan=0.5, humanize=H, rng=rng)
+                m = [a[0], a[1], a[2], a[1]][k % 4] + (12 if k >= 4 else 0)
+                mx.add("harp", harp.render(m, None, 0.38), b0 + k * 0.5, pan=0.5, humanize=H, rng=rng)
                 harp_ev.append((b0 + k * 0.5, 0.5, m))
 
     # ---- orchestral percussion
@@ -202,9 +217,9 @@ def main():
 
     # ---- mix
     gains = {"solo": 0.8, "sect": 0.95, "low": 0.55, "stacc": 0.45, "pad": 0.75, "harp": 0.75,
-             "perc": 0.5, "timp": 0.8}
+             "harplead": 0.8, "perc": 0.5, "timp": 0.8}
     wet = {"solo": 0.22, "sect": 0.25, "low": 0.12, "stacc": 0.15, "pad": 0.3, "harp": 0.3,
-           "perc": 0.12, "timp": 0.2}
+           "harplead": 0.32, "perc": 0.12, "timp": 0.2}
     ir = make_ir(seconds=2.2, decay=0.5)
     total = None
     for name, b in mx.buses.items():
@@ -219,11 +234,12 @@ def main():
     # keep the loudness the game's playback gain was tuned for (v1.8: -11.5 LUFS)
     import pyloudnorm
     lufs = pyloudnorm.Meter(SR).integrated_loudness(x.T)
-    if lufs > -11.5:
-        x = x * 10 ** ((-11.5 - lufs) / 20)
+    x = x * 10 ** ((-11.5 - lufs) / 20)
+    if np.max(np.abs(x)) > 0.89:  # never exceed -1 dBFS
+        x = x / np.max(np.abs(x)) * 0.89
     export("dawnweaver_battle_violin_real_loop", x, loop_n, "糸車の剣舞 (Violin Battle, recorded strings)")
     write_midi(os.path.join(OUT, "dawnweaver_battle_violin_real.mid"), BPM,
-               [("Solo Violin", 40, 0, mel), ("Violin Section", 48, 1, duet), ("Cello/Bass", 42, 2, bass_ev),
+               [("Solo Violin", 40, 0, mel), ("Harp Melody", 46, 6, harp_tune), ("Violin Section", 48, 1, duet), ("Cello/Bass", 42, 2, bass_ev),
                 ("Staccato Strings", 45, 3, stacc_ev), ("Pad", 48, 4, pad_ev), ("Harp", 46, 5, harp_ev)])
 
 
