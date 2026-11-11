@@ -1,0 +1,32 @@
+# Dawn Weaver 戦闘音楽（自作合成版）
+
+| ファイル | 曲名 | 調 / テンポ | 長さ | 用途 |
+|---|---|---|---|---|
+| `out/dawnweaver_title_theme_real_loop.*` | 暁を織る者 | ニ長調 / 84 BPM / 3拍子 / 24小節 | 51.43秒 | タイトル画面（ループ、実録音） |
+| `out/dawnweaver_field_real_loop.*` | 灯の谷を渡る風 | ト長調 / 108 BPM / 4拍子 / 24小節 | 53.33秒 | フィールド（ループ、実録音） |
+| `out/dawnweaver_battle_normal_loop.*` | 朝霧を織る刃 | ニ短調 / 156 BPM / 4拍子 / 24小節 | 36.92秒 | 通常戦闘（ループ） |
+| `out/dawnweaver_battle_boss_loop.*` | 黎明を喰らうもの | ハ短調 / 172 BPM / 4拍子（3+3+2）/ 32小節 | 44.65秒 | ボス戦（ループ） |
+| `out/dawnweaver_battle_violin_loop.*` | 糸車の剣舞 | イ短調 / 168 BPM / 4拍子 / 24小節 | 34.29秒 | 戦闘・バイオリン主役（ループ） |
+| `out/dawnweaver_battle_guitar_loop.*` | 灰の峠を駆ける | ホ短調 / 160 BPM / 4拍子 / 24小節 | 36.00秒 | 戦闘・エレキギター主役（ループ） |
+| `out/dawnweaver_battle_violin_real_loop.*` | 糸車の剣舞（生録音版） | イ短調 / 168 BPM / 4拍子 / 24小節 | 34.29秒 | 戦闘・バイオリン主役（ループ、実録音の弦） |
+| `out/dawnweaver_battle_boss_real_loop.*` | 黎明を喰らうもの（生録音版） | ハ短調 / 172 BPM / 4拍子（3+3+2）/ 32小節 | 44.65秒 | ボス戦（ループ、実録音オーケストラ） |
+| `out/dawnweaver_encounter_normal.*` | 戦闘突入（通常） | イ短調 / 168 BPM | 2.40秒 | 通常戦闘に入る時（1回再生、実録音） |
+| `out/dawnweaver_encounter_boss.*` | 戦闘突入（ボス） | ハ短調 / 120 BPM | 4.80秒 | ボス戦に入る時（1回再生、実録音） |
+| `out/dawnweaver_victory_fanfare.*` | 夜明けの糸 | ニ長調 / 132 BPM / 3小節 + 余韻 | 8.45秒 | 戦闘勝利（1回再生） |
+| `out/dawnweaver_victory_fanfare_real.*` | 夜明けの糸（生録音版） | ニ長調 / 132 BPM / 3小節 + 余韻 | 8.85秒 | 戦闘勝利（1回再生、実録音オーケストラ） |
+
+- 音源はすべて `synth.py` の numpy 合成（サンプル・外部生成サービス不使用）。`python songs.py`（通常・ボス・勝利）と `python songs2.py`（バイオリン・ギター）で再生成できます。
+- ループ曲は WAV の先頭〜末尾がそのままループ周期です（残響を周期に折り返し加算済み、フェードなし）。MP3 はエンコーダ遅延で継ぎ目がずれるので、ゲームのループ再生には WAV か OGG を推奨。
+- MIDI（`.mid`）は同じ譜面データから書き出したもので、別の音源で鳴らし直す用です。
+- 音量: 通常 −10.9 LUFS / ボス −12.6 LUFS / 勝利 −11.3 LUFS、ピーク −1 dBFS 付近。
+
+## 生録音版（`violin_real.py` / `orchestral_real.py`）
+
+- 音源: [VSCO 2 Community Edition](https://github.com/sgossner/VSCO-2-CE)（CC0 1.0）。ソロバイオリン（アルコ / スピッカート）、バイオリン・ビオラ・チェロ各セクション、コントラバス、ハープ、ティンパニ、大太鼓、スネア、シンバル、タンバリンの実録音を使用。
+- 生成: `VSCO_DIR=<VSCO 2 CEのパス> python violin_real.py`、`python orchestral_real.py`（ボス・勝利）、`python ambient_real.py`（タイトル・フィールド）、`python encounter_real.py`（戦闘突入）。`sampler.py` が読み込み。
+- 必要なPythonパッケージ: numpy, scipy, mido, pyloudnorm
+- ソロバイオリンは奏者のフレージングを模して、フレーズ内の音はアルコ録音の持続部分から始めて前の音と等パワーでクロスフェード（スラー）、休符後と拍頭の長い音だけ弓を返す。音ごとの録音の音量差は、音の胴体部分を測ってフレーズの強弱に合わせて補正（±6dBまで）。
+- ボス・勝利では弦に加えてホルン、トロンボーン、トランペット、チューバ、フルート、グロッケンシュピール、ゴング、スネアロール、ティンパニロールを使用。VSCO 2 CE のオルガンは別ライセンス表記があるため使っていない。
+- VSCO 2 CE のファイル名の音名は弦セクションなどで1オクターブ低く表記されているため、各サンプルの音高を測定し、フォルダごとに多数決でオクターブを補正（結果は `vsco_pitch_cache.json`）。
+- ティンパニは一番低いドラム（実測 約89.5Hz ≒ F2）だけを使い、F2〜C3 の狭い範囲で移調。
+- サスペンデッドシンバルのクレッシェンドは、録音の音量ピークを狙った拍に合わせて配置（`place_swell`）。
